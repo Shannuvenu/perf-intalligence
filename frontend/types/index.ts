@@ -67,6 +67,9 @@ export type ValidationStatus = "valid" | "invalid" | "needs_review";
 export interface RecommendationItem {
   root_cause: string;
   summary: string;
+  problem_explanation?: string | null;
+  user_impact?: string | null;
+  fix_steps?: string[];
   evidence: string[];
   affected_audits: string[];
   impact: Impact;

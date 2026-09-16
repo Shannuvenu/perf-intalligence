@@ -22,6 +22,9 @@ _JSON_SCHEMA_HINT = """Respond with a JSON object of exactly this shape:
     {
       "root_cause": "string",
       "summary": "string",
+      "problem_explanation": "string - what is happening and why, several sentences",
+      "user_impact": "string - what the reader/business loses",
+      "fix_steps": ["ordered concrete action", "..."],
       "evidence": ["string", "..."],
       "affected_audits": ["string", "..."],
       "impact": "high" | "medium" | "low",
