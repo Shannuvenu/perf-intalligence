@@ -7,6 +7,10 @@ FROM node:20-slim AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+# Git doesn't track empty directories, so a fresh clone can be missing
+# public/ entirely if it had no files in it - make sure it exists before
+# the runner stage tries to copy it, so the build never breaks over this.
+RUN mkdir -p public
 
 # NEXT_PUBLIC_* vars are inlined into the client bundle at BUILD time, so
 # this one must be passed as a build ARG (see docker-compose.yml), not just

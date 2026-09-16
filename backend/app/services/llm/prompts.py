@@ -26,6 +26,16 @@ summary, suggested_fix).
 effort to address it), and confidence (0-1, how directly the evidence supports this specific \
 root cause) for each recommendation. Do not compute your own priority label - that is handled \
 downstream from these three ratings.
+  - Explain the problem properly, not just label it. For each recommendation you must fill:
+      * problem_explanation: WHAT is actually happening technically and WHY it happens (the \
+mechanism - e.g. why an oversized image delays LCP, why third-party JS blocks the main thread). \
+Several sentences. Assume the reader is a competent developer who has not diagnosed this specific \
+issue before.
+      * user_impact: what the actual reader of this news site loses because of it, in plain \
+language (blank screen, frozen taps, content jumping, wasted mobile data), and the business \
+consequence where the evidence supports one.
+      * fix_steps: an ordered list of concrete actions a developer can pick up and start on, \
+most impactful first.
   - Give a concrete, developer-actionable suggested_fix (e.g. name the technique: lazy-loading, \
 resource hints, image format/CDN, deferring third-party tags, explicit width/height attributes) \
 - not generic "optimize your website" advice disconnected from the evidence.

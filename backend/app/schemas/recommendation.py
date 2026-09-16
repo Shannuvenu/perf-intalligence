@@ -22,6 +22,14 @@ ValidationStatus = Literal["valid", "invalid", "needs_review"]
 class RecommendationItem(BaseModel):
     root_cause: str = Field(..., min_length=3, max_length=200)
     summary: str = Field(..., min_length=10, max_length=1000)
+
+    # Deep-dive fields: these are what turn a one-line label into an
+    # explanation a developer (or a manager) can actually act on.
+    # Optional so older stored recommendations still parse.
+    problem_explanation: str | None = Field(default=None, max_length=3000)
+    user_impact: str | None = Field(default=None, max_length=2000)
+    fix_steps: list[str] = Field(default_factory=list)
+
     evidence: list[str] = Field(..., min_length=1)
     affected_audits: list[str] = Field(default_factory=list)
     impact: Impact
