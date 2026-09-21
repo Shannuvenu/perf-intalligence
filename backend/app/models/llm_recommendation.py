@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -31,6 +31,12 @@ class LlmRecommendation(Base):
     prompt_version: Mapped[str] = mapped_column(String(32), nullable=False)
 
     validation_status: Mapped[str] = mapped_column(String(16), nullable=False, default="needs_review")
+
+    # The real reason no recommendations were produced (an LLM provider error,
+    # or the mock/real synthesizer's own "evidence too sparse" note) - shown
+    # to the developer instead of a generic message so failures are visible,
+    # not silently mistaken for "everything is healthy".
+    insufficient_evidence_note: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False

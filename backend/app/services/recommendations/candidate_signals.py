@@ -85,13 +85,15 @@ def generate_candidate_signals(evidence: list[Evidence]) -> list[CandidateSignal
             strength=_weight(js_evidence),
         ))
 
-    # 6. Accessibility: labels / alt text / contrast
-    a11y_evidence = [e for e in evidence if "accessibility" in e.tags]
-    if a11y_evidence:
+
+    # 7. Excessive total page weight (bandwidth)
+    bw_evidence = [e for e in (by_metric.get("total_bytes"), by_metric.get("image_optimization_savings_bytes"))
+                   if e is not None]
+    if by_metric.get("total_bytes"):
         candidates.append(CandidateSignal(
-            root_cause_hypothesis="Accessibility violations (labels, alt text, contrast)",
-            supporting_evidence=a11y_evidence,
-            strength=_weight(a11y_evidence),
+            root_cause_hypothesis="Excessive total page weight",
+            supporting_evidence=bw_evidence,
+            strength=_weight(bw_evidence),
         ))
 
     return [c for c in candidates if c.supporting_evidence]

@@ -8,18 +8,18 @@
 }
 
 html, body {
-  background-color: #0a0d12;
-  color: #e6e9ef;
+  background-color: #ffffff;
+  color: #0a0a0a;
   font-family: var(--font-sans);
 }
 
 * {
-  border-color: #232935;
+  border-color: #dcdcdf;
 }
 
 ::selection {
-  background-color: #4f8cff;
-  color: #0a0d12;
+  background-color: #000000;
+  color: #ffffff;
 }
 
 .font-mono-num {
@@ -36,9 +36,9 @@ a {
   height: 10px;
 }
 ::-webkit-scrollbar-track {
-  background: #0a0d12;
+  background: #ffffff;
 }
 ::-webkit-scrollbar-thumb {
-  background: #232935;
+  background: #dcdcdf;
   border-radius: 4px;
 }

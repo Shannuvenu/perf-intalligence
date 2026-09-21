@@ -19,3 +19,8 @@ class StabilizedMetricRead(BaseModel):
 
 class StabilizeRequest(BaseModel):
     window_runs: int | None = None  # override STABILIZATION_WINDOW_RUNS if provided
+
+
+class StrengthsResponse(BaseModel):
+    url_id: int
+    strengths: list[str]

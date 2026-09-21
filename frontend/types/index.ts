@@ -23,6 +23,7 @@ export interface CoreWebVitals {
   tbt_ms?: number | null;
   fcp_ms?: number | null;
   speed_index_ms?: number | null;
+  total_bytes?: number | null;
 }
 
 export interface CategoryScores {
@@ -89,22 +90,12 @@ export interface Recommendation {
   model_name: string;
   prompt_version: string;
   validation_status: ValidationStatus;
+  insufficient_evidence_note?: string | null;
 }
 
-export type TrendDirection = "improving" | "stable" | "regressing" | "insufficient_data";
 
-export interface TrendPoint {
-  timestamp: string;
-  value: number | null;
-}
 
-export interface MetricTrend {
-  metric: string;
-  direction: TrendDirection;
-  points: TrendPoint[];
-}
-
-export interface TrendsResponse {
+export interface StrengthsResponse {
   url_id: number;
-  metrics: MetricTrend[];
+  strengths: string[];
 }

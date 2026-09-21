@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { TrendingUp } from "lucide-react";
 import { api } from "@/lib/api";
 import MetricCard from "@/components/MetricCard";
 import ValidationBadge from "@/components/ValidationBadge";
@@ -21,15 +20,17 @@ function metricStatus(value: number | null | undefined, good: number, poor: numb
 export default async function UrlDetailPage({ params }: { params: { urlId: string } }) {
   const urlId = Number(params.urlId);
 
-  const [url, runs, stabilized, recommendations] = await Promise.all([
+  const [url, runs, stabilized, recommendations, strengthsRes] = await Promise.all([
     api.getUrl(urlId),
     api.listRuns(urlId),
     api.getStabilized(urlId).catch(() => null),
     api.listRecommendations(urlId).catch(() => []),
+    api.getStrengths(urlId).catch(() => ({ url_id: urlId, strengths: [] })),
   ]);
 
   const site = await api.getSite(url.site_id);
   const latestRec = recommendations[0];
+  const strengths = strengthsRes.strengths;
   const m = stabilized?.median_metrics || {};
 
   return (
@@ -70,13 +71,19 @@ export default async function UrlDetailPage({ params }: { params: { urlId: strin
                 </span>
               )}
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
               <MetricCard label="Performance" value={m.performance_score} status={metricStatus(m.performance_score, 90, 50, false)} />
               <MetricCard label="Accessibility" value={m.accessibility_score} status={metricStatus(m.accessibility_score, 90, 70, false)} />
               <MetricCard label="LCP" value={m.lcp_ms ? Math.round(m.lcp_ms) : null} unit="ms" status={metricStatus(m.lcp_ms, 2500, 4000)} />
               <MetricCard label="CLS" value={m.cls} status={metricStatus(m.cls, 0.1, 0.25)} />
               <MetricCard label="TBT" value={m.tbt_ms ? Math.round(m.tbt_ms) : null} unit="ms" status={metricStatus(m.tbt_ms, 200, 600)} />
               <MetricCard label="FCP" value={m.fcp_ms ? Math.round(m.fcp_ms) : null} unit="ms" status={metricStatus(m.fcp_ms, 1800, 3000)} />
+              <MetricCard
+                label="Bandwidth"
+                value={m.total_bytes ? (m.total_bytes / 1_000_000).toFixed(1) : null}
+                unit="MB"
+                status={metricStatus(m.total_bytes, 1_800_000, 3_000_000)}
+              />
             </div>
           </section>
 
@@ -85,9 +92,6 @@ export default async function UrlDetailPage({ params }: { params: { urlId: strin
               <h2 className="text-sm font-medium text-subtext">Top recommended fixes</h2>
               <div className="flex items-center gap-2">
                 {latestRec && <ValidationBadge status={latestRec.validation_status} />}
-                <Link href={`/urls/${urlId}/trends`} className="text-xs text-accent flex items-center gap-1 hover:underline">
-                  <TrendingUp size={13} /> View trends
-                </Link>
               </div>
             </div>
 
@@ -96,8 +100,15 @@ export default async function UrlDetailPage({ params }: { params: { urlId: strin
                 No recommendations generated yet. Click Analyze above.
               </div>
             ) : latestRec.root_cause_groups.length === 0 ? (
-              <div className="border border-border bg-panel rounded p-6 text-sm text-subtext">
-                No root causes surfaced from the current evidence — metrics may already be within healthy thresholds.
+              <div
+                className={`border rounded p-6 text-sm ${
+                  latestRec.validation_status === "invalid"
+                    ? "border-crit/40 bg-crit/5 text-crit"
+                    : "border-border bg-panel text-subtext"
+                }`}
+              >
+                {latestRec.insufficient_evidence_note ||
+                  "No root causes surfaced from the current evidence — metrics may already be within healthy thresholds."}
               </div>
             ) : (
               <div className="space-y-3">
@@ -114,6 +125,27 @@ export default async function UrlDetailPage({ params }: { params: { urlId: strin
               </p>
             )}
           </section>
+
+          {strengths.length > 0 && (
+            <section className="mt-8">
+              <h2 className="text-sm font-medium text-subtext mb-3">
+                What this page is doing well
+                <span className="text-xs text-subtext font-normal ml-2">
+                  — useful when benchmarking against a competitor site
+                </span>
+              </h2>
+              <div className="border border-good/30 bg-good/5 rounded p-4">
+                <ul className="space-y-2">
+                  {strengths.map((s, i) => (
+                    <li key={i} className="text-sm leading-relaxed flex gap-2.5">
+                      <span className="text-good shrink-0 mt-0.5">✓</span>
+                      <span>{s}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </section>
+          )}
         </>
       )}
 

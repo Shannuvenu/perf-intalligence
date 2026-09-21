@@ -191,6 +191,34 @@ _TEMPLATES: dict[str, dict] = {
                           "<label> elements, and adjust text/background color pairs to meet WCAG AA contrast.",
         "impact": "medium", "ease_of_fix": "easy",
     },
+    "Excessive total page weight": {
+        "summary": "The page transfers more total data than mobile readers on limited plans can comfortably afford, "
+                    "slowing every stage of load.",
+        "problem_explanation": (
+            "The page's total transferred bytes - every image, script, stylesheet and font combined - exceed a "
+            "comfortable budget for a mobile connection. This is a cumulative problem rather than one bad file: "
+            "images, unused JavaScript and third-party scripts each add their share, and together they push total "
+            "weight past what 3G/4G connections common among Indian mobile readers can fetch quickly. Because every "
+            "other metric (LCP, FCP, TBT) is downstream of how much data has to arrive first, high total page "
+            "weight tends to show up as a contributing factor across several other findings on this page, not just "
+            "as its own isolated issue."
+        ),
+        "user_impact": (
+            "Readers on capped or slow mobile data plans pay more (in money and time) to load this page than a "
+            "leaner competitor's page. On a slow connection the difference between a 1.8MB and a 3MB+ page can be "
+            "several extra seconds of waiting, and mobile data costs add up over a month of daily reading."
+        ),
+        "fix_steps": [
+            "Break down the byte budget by resource type (images, JS, fonts, third-party) to find the single largest contributor first.",
+            "Apply the image optimization and unused-JS fixes elsewhere in this list - they are usually the two biggest levers on total weight.",
+            "Set a page-weight budget (e.g. 1.8MB) and add a CI check that fails the build if a new page exceeds it.",
+            "Audit third-party scripts for ones that pull in their own large dependencies at runtime.",
+            "Consider serving a lighter-weight template for markets/devices known to be on slower connections.",
+        ],
+        "suggested_fix": "Set a page-weight budget, enforce it in CI, and prioritize the image/JS fixes above since "
+                          "they are usually the largest contributors to total page weight.",
+        "impact": "medium", "ease_of_fix": "medium",
+    },
 }
 
 _SEVERITY_CONFIDENCE = {"critical": 0.9, "warning": 0.7, "info": 0.5}

@@ -68,6 +68,7 @@ class MockPsiProvider(PsiProvider):
         unused_js_bytes = int(_jitter(180_000 if page_type == "homepage" else 90_000, 0.35, rng))
         image_savings_bytes = int(_jitter(220_000 if page_type == "article" else 130_000, 0.35, rng))
         render_blocking_ms = int(_jitter(320, 0.4, rng))
+        total_bytes = int(_jitter(3_100_000 if page_type == "homepage" else 2_000_000, 0.25, rng))
 
         a11y_issues = []
         if a11y < 0.85:
@@ -102,6 +103,7 @@ class MockPsiProvider(PsiProvider):
                     "total-blocking-time": {"numericValue": round(tbt, 1), "displayValue": f"{round(tbt)} ms"},
                     "first-contentful-paint": {"numericValue": round(fcp, 1), "displayValue": f"{fcp/1000:.1f} s"},
                     "speed-index": {"numericValue": round(si, 1), "displayValue": f"{si/1000:.1f} s"},
+                    "total-byte-weight": {"numericValue": total_bytes, "displayValue": f"{total_bytes/1_000_000:.1f} MB"},
                     "unused-javascript": {
                         "score": 0.5 if unused_js_bytes > 100_000 else 1,
                         "details": {"overallSavingsBytes": unused_js_bytes,

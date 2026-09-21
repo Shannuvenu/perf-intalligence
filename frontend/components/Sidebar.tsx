@@ -2,14 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, Gauge, Globe2, LayoutGrid, ListChecks, TrendingUp } from "lucide-react";
+import { Activity, Gauge, Globe2, Sparkles } from "lucide-react";
 
 const NAV_ITEMS = [
-  { href: "/", label: "Overview", icon: LayoutGrid },
   { href: "/sites", label: "Sites", icon: Globe2 },
   { href: "/runs", label: "Runs", icon: Activity },
-  { href: "/recommendations", label: "Recommendations", icon: ListChecks },
-  { href: "/trends", label: "Trends", icon: TrendingUp },
+  { href: "/analyze", label: "Quick Analyze", icon: Sparkles },
 ];
 
 export default function Sidebar() {

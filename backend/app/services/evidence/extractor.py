@@ -77,13 +77,15 @@ def extract_evidence(
                 tags=["performance", "cls", "layout-shift"],
             ))
 
-    fcp = m.get("fcp_ms")
-    if fcp is not None and fcp > settings.FCP_GOOD_MS:
-        severity = "critical" if fcp >= settings.FCP_POOR_MS else "warning"
+
+    total_bytes = m.get("total_bytes")
+    if total_bytes is not None and total_bytes > settings.BANDWIDTH_GOOD_BYTES:
+        severity = "critical" if total_bytes >= settings.BANDWIDTH_POOR_BYTES else "warning"
         evidence.append(Evidence(
-            metric="fcp_ms", value=fcp, threshold=settings.FCP_GOOD_MS, severity=severity,
-            description=f"Median First Contentful Paint is {fcp/1000:.1f}s across {stabilized.run_count} runs.",
-            tags=["performance", "fcp"],
+            metric="total_bytes", value=total_bytes, threshold=settings.BANDWIDTH_GOOD_BYTES, severity=severity,
+            description=f"Median total page weight is {total_bytes/1_000_000:.1f}MB across {stabilized.run_count} "
+                        f"runs (good threshold: {settings.BANDWIDTH_GOOD_BYTES/1_000_000:.1f}MB) - heavy on mobile data.",
+            tags=["performance", "bandwidth"],
         ))
 
     # --- Variability flag (from stabilization, not a "root cause" itself,

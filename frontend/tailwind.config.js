@@ -4,16 +4,16 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        bg: "#0a0d12",
-        panel: "#12161d",
-        panel2: "#171c25",
-        border: "#232935",
-        text: "#e6e9ef",
-        subtext: "#8993a4",
-        accent: "#4f8cff",
-        good: "#34c283",
-        warn: "#e0a83e",
-        crit: "#f0564d",
+        bg: "#ffffff",
+        panel: "#ffffff",
+        panel2: "#f4f4f5",
+        border: "#dcdcdf",
+        text: "#0a0a0a",
+        subtext: "#6b6b70",
+        accent: "#000000",
+        good: "#1a7f4b",
+        warn: "#a5680a",
+        crit: "#c02b26",
       },
       fontFamily: {
         mono: ["ui-monospace", "SF Mono", "Cascadia Mono", "Roboto Mono", "Menlo", "Consolas", "monospace"],

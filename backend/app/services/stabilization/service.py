@@ -16,7 +16,7 @@ from app.core.config import Settings, get_settings
 from app.models.psi_run import PsiRun
 from app.models.stabilized_metric import StabilizedMetric
 
-_METRICS = ["lcp_ms", "cls", "tbt_ms", "fcp_ms", "speed_index_ms"]
+_METRICS = ["lcp_ms", "cls", "tbt_ms", "fcp_ms", "speed_index_ms", "total_bytes"]
 
 
 class InsufficientRunsError(Exception):

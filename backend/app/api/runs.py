@@ -1,3 +1,4 @@
+import asyncio
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -28,10 +29,12 @@ async def run_full_analysis(url: Url = Depends(get_url_or_404), db: Session = De
     settings = get_settings()
     num_runs = settings.STABILIZATION_WINDOW_RUNS
     successful = 0
-    for _ in range(num_runs):
+    for i in range(num_runs):
         run = await run_psi_for_url(db, url)
         if run.run_status == "success":
             successful += 1
+        if settings.PSI_PROVIDER == "real" and i < num_runs - 1:
+            await asyncio.sleep(3)  # avoid Google's short-window rate limit on back-to-back calls
 
     try:
         stabilize_url(db, url.url_id)

@@ -51,12 +51,6 @@ def test_full_pipeline_via_api(client):
     assert resp.status_code == 200
     assert len(resp.json()) == 1
 
-    # 6. Trends
-    resp = client.get(f"/api/urls/{url_id}/trends")
-    assert resp.status_code == 200
-    trends = resp.json()
-    assert trends["url_id"] == url_id
-    assert any(m["metric"] == "lcp_ms" for m in trends["metrics"])
 
 
 def test_stabilize_before_enough_runs_returns_422(client):

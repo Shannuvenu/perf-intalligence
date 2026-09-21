@@ -79,6 +79,7 @@ async def generate_recommendations(
         model_name=provider.model_name,
         prompt_version=PROMPT_VERSION,
         validation_status=validation_status,
+        insufficient_evidence_note=result.insufficient_evidence_note,
         created_at=datetime.now(timezone.utc),
     )
     db.add(record)

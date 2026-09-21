@@ -23,6 +23,7 @@ def _to_read(rec: LlmRecommendation) -> RecommendationRead:
         model_name=rec.model_name,
         prompt_version=rec.prompt_version,
         validation_status=rec.validation_status,
+        insufficient_evidence_note=rec.insufficient_evidence_note,
     )
 
 

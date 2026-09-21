@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import health, recommendations, runs, sites, stabilization, trends, urls
+from app.api import health, quick_analyze, recommendations, runs, sites, stabilization, urls
 from app.core.config import get_settings
 from app.scheduler.scheduler import start_scheduler, stop_scheduler
 
@@ -29,7 +29,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"http://localhost:\d+",
+    allow_origin_regex=r"http://localhost:\d+|https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -39,7 +39,7 @@ app.include_router(health.router)
 app.include_router(sites.router)
 app.include_router(urls.router)
 app.include_router(urls.url_router)
+app.include_router(quick_analyze.router)
 app.include_router(runs.router)
 app.include_router(stabilization.router)
 app.include_router(recommendations.router)
-app.include_router(trends.router)

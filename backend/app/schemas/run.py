@@ -10,6 +10,7 @@ class CoreWebVitals(BaseModel):
     tbt_ms: float | None = None
     fcp_ms: float | None = None
     speed_index_ms: float | None = None
+    total_bytes: float | None = None
 
 
 class CategoryScores(BaseModel):

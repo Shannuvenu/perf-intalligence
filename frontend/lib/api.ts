@@ -1,10 +1,11 @@
 import type {
   PsiRun,
   Recommendation,
+  RecommendationItem,
   RunTriggerResponse,
   Site,
   StabilizedMetric,
-  TrendsResponse,
+  StrengthsResponse,
   UrlCategory,
   UrlItem,
 } from "@/types";
@@ -74,11 +75,16 @@ export const api = {
   stabilize: (urlId: number) =>
     request<StabilizedMetric>(`/api/urls/${urlId}/stabilize`, { method: "POST", body: JSON.stringify({}) }),
   getStabilized: (urlId: number) => request<StabilizedMetric>(`/api/urls/${urlId}/stabilized`),
+  getStrengths: (urlId: number) => request<StrengthsResponse>(`/api/urls/${urlId}/strengths`),
 
   analyze: (urlId: number) => request<Recommendation>(`/api/urls/${urlId}/analyze`, { method: "POST" }),
   listRecommendations: (urlId: number) => request<Recommendation[]>(`/api/urls/${urlId}/recommendations`),
 
-  getTrends: (urlId: number) => request<TrendsResponse>(`/api/urls/${urlId}/trends`),
+  quickAnalyze: (report: unknown) =>
+    request<{ recommendations: RecommendationItem[]; model_name: string; note: string | null }>(
+      "/api/quick-analyze", { method: "POST", body: JSON.stringify(report) }
+    ),
+
 };
 
 export { ApiError };

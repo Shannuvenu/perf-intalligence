@@ -69,3 +69,4 @@ class RecommendationRead(BaseModel):
     model_name: str
     prompt_version: str
     validation_status: ValidationStatus
+    insufficient_evidence_note: str | None = None

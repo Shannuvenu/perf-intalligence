@@ -24,4 +24,4 @@ EXPOSE 8000
 # spec section 20: "backend container should run migrations automatically in
 # development"); see README's Production Considerations for why you would
 # NOT want auto-migrate-on-boot in a real production deployment.
-CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

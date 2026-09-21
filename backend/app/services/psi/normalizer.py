@@ -44,6 +44,7 @@ def normalize_psi_result(raw: dict[str, Any]) -> dict[str, Any]:
         "tbt_ms": _audit_numeric(audits, "total-blocking-time"),
         "fcp_ms": _audit_numeric(audits, "first-contentful-paint"),
         "speed_index_ms": _audit_numeric(audits, "speed-index"),
+        "total_bytes": _audit_numeric(audits, "total-byte-weight"),
     }
 
     def details_items(audit_id: str) -> list[dict]:
