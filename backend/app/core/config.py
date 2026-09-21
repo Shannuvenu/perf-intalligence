@@ -33,9 +33,9 @@ class Settings(BaseSettings):
     PSI_TIMEOUT_SECONDS: int = 60
 
     # --- LLM ---------------------------------------------------------
-    LLM_PROVIDER: Literal["mock", "gemini"] = "mock"
-    GEMINI_API_KEY: str = ""
-    GEMINI_MODEL: str = "gemini-2.5-flash"
+    LLM_PROVIDER: Literal["mock", "groq"] = "mock"
+    GROQ_API_KEY: str = ""
+    GROQ_MODEL: str = "openai/gpt-oss-20b"
     LLM_PROMPT_VERSION: str = "v1"
 
     # --- Raw PSI storage ---------------------------------------------
