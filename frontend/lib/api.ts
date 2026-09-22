@@ -81,10 +81,22 @@ export const api = {
   listRecommendations: (urlId: number) => request<Recommendation[]>(`/api/urls/${urlId}/recommendations`),
 
   quickAnalyze: (report: unknown) =>
-    request<{ recommendations: RecommendationItem[]; model_name: string; note: string | null }>(
-      "/api/quick-analyze", { method: "POST", body: JSON.stringify(report) }
-    ),
+    request<QuickAnalyzeResult>("/api/quick-analyze", { method: "POST", body: JSON.stringify(report) }),
+
+  quickAnalyzeUrl: (url: string) =>
+    request<QuickAnalyzeResult>("/api/quick-analyze/url", {
+      method: "POST",
+      body: JSON.stringify({ url }),
+    }),
 
 };
+
+export interface QuickAnalyzeResult {
+  recommendations: RecommendationItem[];
+  model_name: string;
+  note: string | null;
+  category_scores?: { performance?: number | null; accessibility?: number | null } | null;
+  core_web_vitals?: Record<string, number | null> | null;
+}
 
 export { ApiError };
