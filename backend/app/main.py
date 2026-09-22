@@ -4,7 +4,16 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import health, quick_analyze, recommendations, runs, sites, stabilization, urls
+from app.api import (
+    health,
+    monitoring,
+    quick_analyze,
+    recommendations,
+    runs,
+    sites,
+    stabilization,
+    urls,
+)
 from app.core.config import get_settings
 from app.scheduler.scheduler import start_scheduler, stop_scheduler
 
@@ -40,6 +49,7 @@ app.include_router(sites.router)
 app.include_router(urls.router)
 app.include_router(urls.url_router)
 app.include_router(quick_analyze.router)
+app.include_router(monitoring.router)
 app.include_router(runs.router)
 app.include_router(stabilization.router)
 app.include_router(recommendations.router)

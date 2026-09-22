@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     RUN_INTERVAL_HOURS: int = 6
     AUTO_LLM_ANALYSIS: bool = False
     SCHEDULER_ENABLED: bool = True
+    
+        # --- Google Apps Script monitoring -----------------------------
+    APPS_SCRIPT_MONITORING_URL: str = ""
 
     # --- Stabilization thresholds ------------------------------------
     STABILIZATION_WINDOW_RUNS: int = 5
