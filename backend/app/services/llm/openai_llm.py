@@ -3,8 +3,8 @@ Groq-backed LLM synthesis provider.
 
 Uses Groq's OpenAI-compatible API with strict Structured Outputs.
 
-The model response is constrained to the application's JSON schema
-before it is validated by Pydantic.
+The response is constrained to the same shape expected by
+LlmRecommendationSet and then validated by Pydantic.
 """
 
 import json
@@ -26,8 +26,8 @@ class OpenAiLlmProvider(LlmSynthesisProvider):
     """
     Groq provider using the OpenAI-compatible API.
 
-    The class name is intentionally kept as OpenAiLlmProvider so
-    existing imports continue to work.
+    The class name remains OpenAiLlmProvider so existing imports
+    throughout the application continue to work.
     """
 
     def __init__(
@@ -50,98 +50,115 @@ class OpenAiLlmProvider(LlmSynthesisProvider):
             base_url=base_url,
         )
 
-    def _build_json_schema(self) -> dict:
+    @staticmethod
+    def _build_json_schema() -> dict:
         """
-        Build the strict JSON schema used by Groq Structured Outputs.
+        JSON Schema for Groq Structured Outputs.
 
-        Every field is required because strict mode requires all
-        properties to appear in the required list.
+        This mirrors LlmRecommendationSet / RecommendationItem.
+
+        Groq strict mode requires:
+        - every property to be required
+        - additionalProperties=false
+        - optional values represented using null
         """
+
+        recommendation_item = {
+            "type": "object",
+            "properties": {
+                "root_cause": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 200,
+                },
+                "summary": {
+                    "type": "string",
+                    "minLength": 10,
+                    "maxLength": 1000,
+                },
+                "problem_explanation": {
+                    "type": ["string", "null"],
+                    "maxLength": 3000,
+                },
+                "user_impact": {
+                    "type": ["string", "null"],
+                    "maxLength": 2000,
+                },
+                "fix_steps": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                    },
+                },
+                "evidence": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                    },
+                    "minItems": 1,
+                },
+                "affected_audits": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                    },
+                },
+                "impact": {
+                    "type": "string",
+                    "enum": [
+                        "high",
+                        "medium",
+                        "low",
+                    ],
+                },
+                "ease_of_fix": {
+                    "type": "string",
+                    "enum": [
+                        "easy",
+                        "medium",
+                        "hard",
+                    ],
+                },
+                "confidence": {
+                    "type": "number",
+                    "minimum": 0.0,
+                    "maximum": 1.0,
+                },
+                "suggested_fix": {
+                    "type": "string",
+                    "minLength": 10,
+                    "maxLength": 2000,
+                },
+                "priority": {
+                    "type": ["string", "null"],
+                },
+            },
+            "required": [
+                "root_cause",
+                "summary",
+                "problem_explanation",
+                "user_impact",
+                "fix_steps",
+                "evidence",
+                "affected_audits",
+                "impact",
+                "ease_of_fix",
+                "confidence",
+                "suggested_fix",
+                "priority",
+            ],
+            "additionalProperties": False,
+        }
 
         return {
             "type": "object",
             "properties": {
                 "recommendations": {
                     "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "root_cause": {
-                                "type": "string"
-                            },
-                            "summary": {
-                                "type": "string"
-                            },
-                            "problem_explanation": {
-                                "type": "string"
-                            },
-                            "user_impact": {
-                                "type": "string"
-                            },
-                            "fix_steps": {
-                                "type": "array",
-                                "items": {
-                                    "type": "string"
-                                }
-                            },
-                            "evidence": {
-                                "type": "array",
-                                "items": {
-                                    "type": "string"
-                                }
-                            },
-                            "affected_audits": {
-                                "type": "array",
-                                "items": {
-                                    "type": "string"
-                                }
-                            },
-                            "impact": {
-                                "type": "string",
-                                "enum": [
-                                    "high",
-                                    "medium",
-                                    "low",
-                                ],
-                            },
-                            "ease_of_fix": {
-                                "type": "string",
-                                "enum": [
-                                    "easy",
-                                    "medium",
-                                    "hard",
-                                ],
-                            },
-                            "confidence": {
-                                "type": "number",
-                                "minimum": 0.0,
-                                "maximum": 1.0,
-                            },
-                            "suggested_fix": {
-                                "type": "string"
-                            },
-                        },
-                        "required": [
-                            "root_cause",
-                            "summary",
-                            "problem_explanation",
-                            "user_impact",
-                            "fix_steps",
-                            "evidence",
-                            "affected_audits",
-                            "impact",
-                            "ease_of_fix",
-                            "confidence",
-                            "suggested_fix",
-                        ],
-                        "additionalProperties": False,
-                    },
+                    "items": recommendation_item,
                 },
                 "insufficient_evidence_note": {
-                    "type": [
-                        "string",
-                        "null",
-                    ]
+                    "type": ["string", "null"],
                 },
             },
             "required": [
@@ -171,21 +188,25 @@ class OpenAiLlmProvider(LlmSynthesisProvider):
         system_prompt = f"""
 {SYSTEM_PROMPT}
 
-IMPORTANT OUTPUT RULES:
+IMPORTANT RULES:
 
-- Return recommendations ONLY from the supplied evidence.
-- Never invent a PageSpeed problem.
-- Every recommendation must have concrete evidence.
-- Every recommendation must contain every required field.
-- fix_steps MUST be an array of strings.
-- evidence MUST be an array of strings.
-- affected_audits MUST be an array of strings.
-- confidence MUST be between 0.0 and 1.0.
-- impact MUST be high, medium, or low.
-- ease_of_fix MUST be easy, medium, or hard.
-- If there is insufficient evidence, use the
-  insufficient_evidence_note field.
-- Do not put explanations outside the structured response.
+1. Return only the structured recommendation response.
+2. Never invent a problem that is not supported by the supplied evidence.
+3. Every recommendation must be directly supported by evidence.
+4. Every recommendation must contain every field.
+5. fix_steps must contain ONLY strings.
+6. evidence must contain ONLY strings.
+7. affected_audits must contain ONLY strings.
+8. problem_explanation may be a string or null.
+9. user_impact may be a string or null.
+10. priority may be a string or null.
+11. insufficient_evidence_note may be a string or null.
+12. confidence must be between 0.0 and 1.0.
+13. impact must be exactly one of: high, medium, low.
+14. ease_of_fix must be exactly one of: easy, medium, hard.
+15. Do not add fields that are not defined by the schema.
+16. Do not return Markdown.
+17. Keep the recommendations evidence-backed and actionable.
 """
 
         try:
@@ -193,7 +214,6 @@ IMPORTANT OUTPUT RULES:
                 model=self.model_name,
 
                 reasoning_effort="low",
-
 
                 response_format={
                     "type": "json_schema",
@@ -242,9 +262,7 @@ IMPORTANT OUTPUT RULES:
             ) from exc
 
         try:
-            return LlmRecommendationSet.model_validate(
-                parsed
-            )
+            return LlmRecommendationSet.model_validate(parsed)
 
         except ValidationError as exc:
             raise LlmProviderError(
