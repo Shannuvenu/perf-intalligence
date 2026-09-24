@@ -236,6 +236,11 @@ export interface QuickAnalyzeResult {
     string,
     number | null
   > | null;
+
+  // The literal URL PageSpeed analyzed - may differ from what the user
+  // typed only in that it is echoed back verbatim, never the target of a
+  // redirect_url= query param PageSpeed never followed.
+  analyzed_url?: string | null;
 }
 
 // -----------------------------------------------------------------------------

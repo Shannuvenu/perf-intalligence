@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     PSI_API_BASE_URL: str = (
         "https://www.googleapis.com/pagespeedonline/v5/runPagespeed"
     )
-    PSI_TIMEOUT_SECONDS: int = 60
+    PSI_TIMEOUT_SECONDS: int = 120
 
     # --- LLM ---------------------------------------------------------
     LLM_PROVIDER: Literal["mock", "groq"] = "mock"

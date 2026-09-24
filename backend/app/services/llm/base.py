@@ -15,6 +15,9 @@ class LlmSynthesisProvider(ABC):
 
     @abstractmethod
     async def synthesize(
-        self, evidence: list[Evidence], candidates: list[CandidateSignal]
+        self,
+        evidence: list[Evidence],
+        candidates: list[CandidateSignal],
+        page_metrics: dict | None = None,
     ) -> LlmRecommendationSet:
         raise NotImplementedError

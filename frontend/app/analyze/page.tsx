@@ -54,11 +54,13 @@ function metricStatus(
 function ResultsPanel({
   loading,
   error,
+  note,
   results,
   modelName,
 }: {
   loading: boolean;
   error: string | null;
+  note: string | null;
   results: QuickAnalyzeResult | null;
   modelName: string | null;
 }) {
@@ -72,6 +74,15 @@ function ResultsPanel({
       {modelName && !loading && (
         <p className="text-xs text-subtext mt-3">
           Analyzed by {modelName}
+        </p>
+      )}
+
+      {results?.analyzed_url && !loading && (
+        <p className="text-xs text-subtext mt-1 break-all">
+          Analyzed URL:{" "}
+          <span className="font-mono-num text-text/90">
+            {results.analyzed_url}
+          </span>
         </p>
       )}
 
@@ -181,6 +192,21 @@ function ResultsPanel({
             />
           </div>
         )}
+
+      {!error && !loading && results && items.length === 0 && (
+        <div className="mt-6 border border-border bg-panel rounded p-4">
+          <div className="text-sm font-medium text-text">
+            {note && note.toLowerCase().includes("root cause")
+              ? "Root cause not established"
+              : "No actionable improvements identified"}
+          </div>
+          <p className="text-sm text-subtext mt-1.5 leading-relaxed">
+            {note ||
+              "PageSpeed evidence for this run did not establish a specific, evidence-backed root cause. " +
+                "No recommendation was generated rather than guessing."}
+          </p>
+        </div>
+      )}
 
       {items.length > 0 && (
         <div className="mt-6 space-y-3">
@@ -352,6 +378,9 @@ function QuickAnalyzeInner() {
   const [error, setError] =
     useState<string | null>(null);
 
+  const [note, setNote] =
+    useState<string | null>(null);
+
   const [results, setResults] =
     useState<QuickAnalyzeResult | null>(null);
 
@@ -382,6 +411,7 @@ function QuickAnalyzeInner() {
     fn: () => Promise<QuickAnalyzeResult>
   ) {
     setError(null);
+    setNote(null);
     setResults(null);
     setModelName(null);
     setLoading(true);
@@ -393,7 +423,7 @@ function QuickAnalyzeInner() {
       setModelName(res.model_name);
 
       if (res.recommendations.length === 0) {
-        setError(
+        setNote(
           res.note ||
             "No issues surfaced - metrics may already be healthy."
         );
@@ -648,6 +678,7 @@ function QuickAnalyzeInner() {
       <ResultsPanel
         loading={loading}
         error={error}
+        note={note}
         results={results}
         modelName={modelName}
       />

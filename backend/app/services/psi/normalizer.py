@@ -3,6 +3,10 @@ Converts a raw PSI/Lighthouse JSON payload (from either provider) into the
 normalized shape stored on PsiRun: category_scores, core_web_vitals, and
 normalized_audits. Everything downstream (stabilization, evidence
 extraction) reads only this normalized shape, never the raw JSON again.
+
+Resource-level detail (which URL, how many bytes/ms) is preserved wherever
+Lighthouse provides it, so evidence extracted later can point at an actual
+resource instead of a bare aggregate number.
 """
 from typing import Any
 
@@ -59,6 +63,26 @@ def normalize_psi_result(raw: dict[str, Any]) -> dict[str, Any]:
         audit = audits.get(audit_id) or {}
         return int((audit.get("details") or {}).get("overallSavingsMs", 0) or 0)
 
+    def resource_items_bytes(audit_id: str) -> list[dict]:
+        """Preserve per-resource wasted-bytes detail, when Lighthouse gives it,
+        so evidence can point at an actual URL instead of just a total."""
+        items = []
+        for item in details_items(audit_id):
+            url = item.get("url")
+            wasted = item.get("wastedBytes")
+            if url and wasted is not None:
+                items.append({"resource": url, "wasted_bytes": int(wasted)})
+        return sorted(items, key=lambda i: i["wasted_bytes"], reverse=True)
+
+    def resource_items_ms(audit_id: str) -> list[dict]:
+        items = []
+        for item in details_items(audit_id):
+            url = item.get("url")
+            wasted = item.get("wastedMs")
+            if url and wasted is not None:
+                items.append({"resource": url, "wasted_ms": int(wasted)})
+        return sorted(items, key=lambda i: i["wasted_ms"], reverse=True)
+
     third_party_items = details_items("third-party-summary")
     third_party_blocking_ms = sum(float(i.get("blockingTime", 0) or 0) for i in third_party_items)
 
@@ -86,6 +110,12 @@ def normalize_psi_result(raw: dict[str, Any]) -> dict[str, Any]:
         "layout_shift_sources": [i.get("node") for i in details_items("layout-shift-elements")],
         "main_thread_breakdown": details_items("mainthread-work-breakdown"),
         "accessibility_findings": a11y_findings,
+        # Resource-level detail (product spec section 1/14): who exactly is
+        # responsible for the aggregate savings figure above, when Lighthouse
+        # reports it. Never invented when Lighthouse doesn't provide items.
+        "unused_javascript_items": resource_items_bytes("unused-javascript"),
+        "render_blocking_items": resource_items_ms("render-blocking-resources"),
+        "image_optimization_items": resource_items_bytes("uses-optimized-images"),
     }
 
     return {

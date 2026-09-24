@@ -66,12 +66,15 @@ export type Ease = "easy" | "medium" | "hard";
 export type ValidationStatus = "valid" | "invalid" | "needs_review";
 
 export interface RecommendationItem {
+  candidate_id: string;
   root_cause: string;
   summary: string;
   problem_explanation?: string | null;
   user_impact?: string | null;
   fix_steps?: string[];
+  evidence_refs: string[];
   evidence: string[];
+  resources: string[];
   affected_audits: string[];
   impact: Impact;
   ease_of_fix: Ease;

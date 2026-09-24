@@ -1,23 +1,27 @@
 """
 Deterministic mock "LLM" synthesizer - lets the whole app be demoed without
-an OpenAI key. It performs the same synthesis job a real LLM call would (turn
-candidate signals + evidence into worded, ranked recommendations) using
-fixed templates keyed by root_cause_hypothesis, so behavior is reproducible.
-
-Each template deliberately answers four separate questions, because a
-one-line label ("Image delivery/optimization") is not an explanation:
-  summary             -> what the issue is, in one line
-  problem_explanation -> WHAT is actually happening and WHY it happens
-  user_impact         -> what the reader/business actually loses because of it
-  fix_steps           -> ordered, concrete actions a developer can pick up
+a Groq key. It performs the same synthesis job a real LLM call would (turn
+supported candidates + evidence into worded, ranked recommendations) using
+fixed templates keyed by candidate_id, so behavior is reproducible and, like
+the real provider, it can ONLY ever reference the evidence ids actually
+attached to each candidate.
 """
 from app.schemas.recommendation import LlmRecommendationSet, RecommendationItem
 from app.services.evidence.models import Evidence
 from app.services.llm.base import LlmSynthesisProvider
-from app.services.recommendations.candidate_signals import CandidateSignal
+from app.services.recommendations.candidate_signals import (
+    ACCESSIBILITY,
+    IMAGE_OPTIMIZATION,
+    LAYOUT_SHIFT,
+    PAGE_WEIGHT,
+    RENDER_BLOCKING,
+    THIRD_PARTY_BLOCKING,
+    UNUSED_JAVASCRIPT,
+    CandidateSignal,
+)
 
 _TEMPLATES: dict[str, dict] = {
-    "Heavy third-party/ad-related execution": {
+    THIRD_PARTY_BLOCKING: {
         "summary": "Third-party scripts (ad tech, analytics) are consuming a large share of main-thread "
                     "time, degrading TBT and delaying interactivity.",
         "problem_explanation": (
@@ -49,174 +53,141 @@ _TEMPLATES: dict[str, dict] = {
                           "that can be removed or consolidated via a tag manager with load prioritization.",
         "impact": "high", "ease_of_fix": "medium",
     },
-    "Image delivery/optimization": {
-        "summary": "Images are shipped larger than necessary, adding payload weight and delaying LCP "
-                    "when the LCP element is an image.",
+    IMAGE_OPTIMIZATION: {
+        "summary": "PageSpeed identified image optimization savings, adding payload weight beyond what the "
+                    "layout actually needs.",
         "problem_explanation": (
-            "The page is downloading images at a far higher resolution and file size than the layout "
-            "actually displays them at - for example a 2000px-wide hero file rendered into a 380px-wide "
-            "phone screen. The browser must download the entire file before it can paint it, so an "
-            "oversized hero image directly delays Largest Contentful Paint; on a news article the hero "
-            "image usually IS the LCP element, which is why this shows up as a performance problem rather "
-            "than just a bandwidth one. Compounding it, the images are typically being served in older "
-            "formats (JPEG/PNG) instead of modern WebP or AVIF, which reach the same visual quality in "
-            "roughly 25-35% fewer bytes."
+            "PageSpeed's image-optimization audit reports that the page is downloading images at a higher "
+            "resolution and/or file size than necessary, or in an older format than modern alternatives. The "
+            "browser must download the full file before it can paint it, so this is a candidate contributor "
+            "to paint timing when the affected image is on the critical path - review whether the specific "
+            "resource flagged is the page's LCP element before assuming that connection."
         ),
         "user_impact": (
-            "Readers on mobile data - the majority of Indian news traffic - watch a blank or half-rendered "
-            "article while the hero image downloads. Slower LCP measurably raises bounce rate, so readers "
-            "leave before the article renders. The wasted bytes also cost the reader real money on a metered "
-            "connection, and cost the publisher real money in CDN egress."
+            "Readers on mobile data download more bytes than the displayed image size requires, which can "
+            "delay when the surrounding content becomes visible and costs the reader real data."
         ),
         "fix_steps": [
-            "Identify the LCP element on this page (usually the article hero image) and confirm its actual rendered size versus the file size served.",
+            "Confirm the actual rendered size versus the file size served for the flagged resource.",
             "Generate responsive variants and serve them with srcset/sizes so a phone never downloads a desktop-sized file.",
-            "Convert to WebP or AVIF with a JPEG fallback, ideally automatically at the CDN rather than manually per article.",
-            "Set explicit width and height (or aspect-ratio CSS) on every image so reserving space also fixes layout shift.",
-            "Preload the hero image so the browser starts fetching it immediately instead of waiting to discover it in the HTML.",
-            "Lazy-load every image below the fold so they do not compete for bandwidth with the hero.",
+            "Convert to WebP or AVIF with a fallback, ideally automatically at the CDN rather than manually per image.",
+            "Set explicit width and height (or aspect-ratio CSS) on the image so reserving space also helps layout stability.",
         ],
-        "suggested_fix": "Serve images via a responsive/optimized pipeline (WebP/AVIF, correct srcset sizes, "
-                          "CDN-based auto-compression) and set explicit width/height to avoid re-layout.",
+        "suggested_fix": "Serve this resource via a responsive/optimized pipeline (WebP/AVIF, correct srcset "
+                          "sizes, CDN-based auto-compression) and set explicit width/height.",
         "impact": "high", "ease_of_fix": "medium",
     },
-    "Layout instability": {
-        "summary": "Elements (ad slots, hero images) shift after initial render, contributing to CLS.",
+    LAYOUT_SHIFT: {
+        "summary": "Elements shift after initial render, contributing to CLS.",
         "problem_explanation": (
-            "Ad slots and images are being inserted into the page without their dimensions reserved in "
-            "advance. The browser lays out the page with those elements at zero height, paints it, and then "
-            "- when the ad or image finally arrives - re-runs layout and pushes everything below it further "
-            "down. Cumulative Layout Shift measures exactly this: content that was already visible moving "
-            "unexpectedly. It is not a loading-speed problem, which is why a page can score well on LCP and "
-            "still fail CLS. Ad slots are the usual culprit on news sites because the slot's final height "
-            "depends on which creative the ad server returns, so nothing reserves space by default."
+            "PageSpeed reports layout shift for the specific elements listed in the evidence. These are "
+            "typically inserted without their final dimensions reserved in advance, so the browser lays out "
+            "the page with them at zero (or wrong) height, then re-runs layout once the real content arrives "
+            "- pushing everything below it. Cumulative Layout Shift measures exactly this: content that was "
+            "already visible moving unexpectedly."
         ),
         "user_impact": (
             "A reader is mid-sentence, or reaching to tap a link, and the content jumps under their finger - "
-            "frequently causing an accidental tap on the ad that just loaded. Accidental ad clicks look like "
-            "engagement in reporting but are experienced as a trick by the reader, and they are a recurring "
-            "source of complaints and uninstalls on mobile."
+            "frequently causing an accidental tap on whatever loaded into that space."
         ),
         "fix_steps": [
-            "Reserve a fixed min-height on every ad slot container, sized to the most common creative for that slot.",
-            "Add explicit width and height attributes (or aspect-ratio CSS) to every image and embed.",
+            "Reserve a fixed min-height on the flagged element(s), sized to the most common content for that slot.",
+            "Add explicit width and height attributes (or aspect-ratio CSS) to the flagged images/embeds.",
             "Never inject banners, notification bars or consent prompts above content that is already rendered - overlay them instead.",
-            "Preload web fonts and use font-display: optional or swap with a metric-matched fallback so text does not reflow when the font arrives.",
             "Re-test after each change: CLS is cumulative, so several small shifts add up to one failing score.",
         ],
-        "suggested_fix": "Reserve space with explicit width/height or aspect-ratio CSS for ad slots and "
-                          "images, and avoid injecting content above existing content after load.",
+        "suggested_fix": "Reserve space with explicit width/height or aspect-ratio CSS for the flagged "
+                          "elements, and avoid injecting content above existing content after load.",
         "impact": "medium", "ease_of_fix": "easy",
     },
-    "Render-blocking resources on the critical path": {
+    RENDER_BLOCKING: {
         "summary": "CSS/JS on the critical rendering path is delaying first paint.",
         "problem_explanation": (
-            "Stylesheets and scripts referenced in the document head block the browser from painting "
-            "anything at all until they have been downloaded and parsed. The browser cannot safely show a "
-            "single pixel until it knows the CSS rules, otherwise content would flash unstyled and then "
-            "rearrange. So every millisecond spent fetching a blocking resource is a millisecond the reader "
-            "spends on a blank white screen - which is what First Contentful Paint measures. The usual cause "
-            "is one large site-wide stylesheet plus several synchronous scripts loaded in the head, where "
-            "only a small fraction of that CSS is needed to render what is initially on screen."
+            "PageSpeed's render-blocking-resources audit identifies specific stylesheets/scripts that block "
+            "the browser from painting anything until they are downloaded and parsed. The browser cannot "
+            "safely show a single pixel until it knows the CSS rules, so every millisecond spent fetching a "
+            "blocking resource is a millisecond the reader spends on a blank screen."
         ),
         "user_impact": (
-            "The reader taps a headline and gets a white screen before any text appears. This is the moment "
-            "most abandonments happen, because the reader has no feedback that anything is loading - on a "
-            "slow connection many will hit back and go to a competitor's article instead."
+            "The reader taps a headline and gets a white screen before any text appears - a common point of "
+            "abandonment on a slow connection."
         ),
         "fix_steps": [
-            "Extract the CSS actually needed for above-the-fold content and inline it directly in the head.",
+            "Review the specific flagged resource(s) and extract the CSS actually needed for above-the-fold content, inlining it in the head.",
             "Load the remaining stylesheet asynchronously so it no longer blocks first paint.",
             "Add defer (or async where order does not matter) to scripts in the head that are not needed for initial render.",
-            "Add preconnect hints for the origins serving fonts, images and ads so the connection handshake happens in parallel.",
-            "Re-measure FCP after each change - this area gives the fastest visible wins of any item on this list.",
+            "Re-measure FCP after each change.",
         ],
-        "suggested_fix": "Inline critical CSS, defer non-critical stylesheets/scripts, and add "
-                          "resource hints (preconnect/preload) for key origins.",
+        "suggested_fix": "Review whether the flagged resource(s) can be reduced, split, deferred, or "
+                          "otherwise removed from the critical rendering path; inline only the CSS needed "
+                          "for the initial viewport.",
         "impact": "medium", "ease_of_fix": "medium",
     },
-    "Unused/unoptimized JavaScript bundles": {
+    UNUSED_JAVASCRIPT: {
         "summary": "A significant amount of shipped JavaScript is unused on this page, adding parse/compile "
                     "and download cost.",
         "problem_explanation": (
-            "A large share of the JavaScript delivered to this page is never executed on this page. The cost "
-            "is paid three times over: the bytes are downloaded, the parser reads them, and the JavaScript "
-            "engine compiles them - the last two both on the main thread, before the page can become "
-            "interactive. This normally happens when one bundle is built to serve every page type (so an "
-            "article page also ships the homepage carousel and the live-blog code), or when polyfills for "
-            "browsers the site no longer supports are still included in the build."
+            "PageSpeed's unused-javascript audit reports that a large share of the JavaScript delivered to "
+            "this page is never executed on it. The cost is paid three times over: the bytes are downloaded, "
+            "the parser reads them, and the JavaScript engine compiles them - the last two both on the main "
+            "thread, before the page can become interactive."
         ),
         "user_impact": (
             "Slower time-to-interactive on exactly the devices that can least afford it - mid-range Android "
-            "phones, where parse and compile are several times slower than on a developer's laptop. The "
-            "reader waits longer before they can scroll or tap, and burns data on code that never runs."
+            "phones, where parse and compile are several times slower than on a developer's laptop."
         ),
         "fix_steps": [
-            "Run a coverage trace on this page to see which bundles are loaded but largely unexecuted.",
+            "Run a coverage trace on this page to confirm which parts of the flagged bundle are unexecuted.",
             "Code-split by route so an article page ships article code only, not homepage or live-blog code.",
-            "Drop legacy polyfills for browsers outside the current support matrix, and confirm that matrix with analytics rather than assumption.",
-            "Tree-shake and audit heavy dependencies - a date or utility library pulled in for one function is a common find.",
-            "Add a bundle-size check to CI so this does not regress silently with the next feature.",
+            "Drop legacy polyfills for browsers outside the current support matrix.",
+            "Add a bundle-size check to CI so this does not regress silently.",
         ],
-        "suggested_fix": "Code-split by route/component, tree-shake unused vendor code, and audit bundles "
-                          "for legacy polyfills no longer needed for the target browser matrix.",
+        "suggested_fix": "Code-split by route/component, tree-shake unused vendor code in the flagged "
+                          "bundle, and audit for legacy polyfills no longer needed.",
         "impact": "medium", "ease_of_fix": "hard",
     },
-    "Accessibility violations (labels, alt text, contrast)": {
+    ACCESSIBILITY: {
         "summary": "Recurring accessibility audit failures affect screen-reader and low-vision users.",
         "problem_explanation": (
-            "Three distinct classes of failure are recurring across runs. Images are missing alt attributes, "
-            "so a screen reader either announces nothing or reads out the raw filename - for a news article "
-            "the hero image often carries real editorial meaning that is then lost entirely. Form inputs "
-            "(newsletter signup, search) have no associated label element, so a screen-reader user hears an "
-            "unlabelled text box with no indication of what to type. And text/background colour pairs fall "
-            "below the WCAG AA contrast ratio of 4.5:1, typically on bylines, timestamps and captions where "
-            "a light grey was chosen for visual hierarchy. Because these repeat across multiple runs rather "
-            "than appearing once, they are template-level issues, not one bad article."
+            "The referenced accessibility audit(s) failed in a majority of runs, which means this is a "
+            "template-level issue rather than one bad page load. Depending on the specific audit, this "
+            "typically means images missing alt text, form inputs missing an associated label, or "
+            "text/background colour pairs falling below the WCAG AA contrast ratio."
         ),
         "user_impact": (
-            "Readers using screen readers cannot navigate the article properly. Readers with low vision - and "
-            "any reader outdoors in bright sunlight, which is a large share of mobile news reading - cannot "
-            "read low-contrast bylines and captions at all. For a publisher this is both an audience-reach "
-            "problem and a compliance exposure, since accessibility standards increasingly carry legal weight."
+            "Readers using screen readers or with low vision cannot use this page as intended - both an "
+            "audience-reach problem and a compliance exposure."
         ),
         "fix_steps": [
-            "Add descriptive alt text to content and hero images in the CMS, and make the field mandatory at upload so the fix stays fixed.",
-            "Associate every form input with a visible <label> element, or an aria-label where a visible label would break the design.",
-            "Raise text colours that fall below 4.5:1 contrast - bylines, timestamps and captions are the usual offenders.",
-            "Fix these in the shared page template rather than per article, since the audit failures repeat across runs.",
-            "Add an automated accessibility check to CI so new templates are caught before publication.",
+            "Open the specific failing audit and its affected node(s) in the evidence to see exactly what's failing.",
+            "Fix the underlying template rather than the individual page, since the failure repeats across runs.",
+            "Add an automated accessibility check to CI so regressions are caught before publication.",
         ],
-        "suggested_fix": "Add descriptive alt text to content/hero images, associate form inputs with "
-                          "<label> elements, and adjust text/background color pairs to meet WCAG AA contrast.",
+        "suggested_fix": "Address the specific failing accessibility audit (alt text, label association, or "
+                          "contrast, depending on which one was flagged) at the shared template level.",
         "impact": "medium", "ease_of_fix": "easy",
     },
-    "Excessive total page weight": {
-        "summary": "The page transfers more total data than mobile readers on limited plans can comfortably afford, "
-                    "slowing every stage of load.",
+    PAGE_WEIGHT: {
+        "summary": "The page transfers more total data than mobile readers on limited plans can comfortably "
+                    "afford, slowing every stage of load.",
         "problem_explanation": (
-            "The page's total transferred bytes - every image, script, stylesheet and font combined - exceed a "
-            "comfortable budget for a mobile connection. This is a cumulative problem rather than one bad file: "
-            "images, unused JavaScript and third-party scripts each add their share, and together they push total "
-            "weight past what 3G/4G connections common among Indian mobile readers can fetch quickly. Because every "
-            "other metric (LCP, FCP, TBT) is downstream of how much data has to arrive first, high total page "
-            "weight tends to show up as a contributing factor across several other findings on this page, not just "
-            "as its own isolated issue."
+            "PageSpeed's total-byte-weight measurement exceeds the configured budget. This is a cumulative "
+            "problem rather than one bad file - images, unused JavaScript and third-party scripts each add "
+            "their share. Because every other metric (LCP, FCP, TBT) is downstream of how much data has to "
+            "arrive first, high total page weight tends to show up as a contributing factor across several "
+            "other findings, not just as its own isolated issue."
         ),
         "user_impact": (
-            "Readers on capped or slow mobile data plans pay more (in money and time) to load this page than a "
-            "leaner competitor's page. On a slow connection the difference between a 1.8MB and a 3MB+ page can be "
-            "several extra seconds of waiting, and mobile data costs add up over a month of daily reading."
+            "Readers on capped or slow mobile data plans pay more, in money and time, to load this page than "
+            "a leaner competitor's page."
         ),
         "fix_steps": [
             "Break down the byte budget by resource type (images, JS, fonts, third-party) to find the single largest contributor first.",
-            "Apply the image optimization and unused-JS fixes elsewhere in this list - they are usually the two biggest levers on total weight.",
-            "Set a page-weight budget (e.g. 1.8MB) and add a CI check that fails the build if a new page exceeds it.",
-            "Audit third-party scripts for ones that pull in their own large dependencies at runtime.",
-            "Consider serving a lighter-weight template for markets/devices known to be on slower connections.",
+            "Apply the image optimization and unused-JS fixes elsewhere in this list if they are also present - they are usually the two biggest levers on total weight.",
+            "Set a page-weight budget and add a CI check that fails the build if a new page exceeds it.",
         ],
-        "suggested_fix": "Set a page-weight budget, enforce it in CI, and prioritize the image/JS fixes above since "
-                          "they are usually the largest contributors to total page weight.",
+        "suggested_fix": "Set a page-weight budget, enforce it in CI, and prioritize whichever other flagged "
+                          "findings (images/JS) are the largest contributors to total page weight.",
         "impact": "medium", "ease_of_fix": "medium",
     },
 }
@@ -235,7 +206,10 @@ class MockLlmProvider(LlmSynthesisProvider):
     model_name = "mock-llm-v1"
 
     async def synthesize(
-        self, evidence: list[Evidence], candidates: list[CandidateSignal]
+        self,
+        evidence: list[Evidence],
+        candidates: list[CandidateSignal],
+        page_metrics: dict | None = None,
     ) -> LlmRecommendationSet:
         if not candidates:
             return LlmRecommendationSet(
@@ -247,18 +221,16 @@ class MockLlmProvider(LlmSynthesisProvider):
 
         items: list[RecommendationItem] = []
         for candidate in candidates:
-            template = _TEMPLATES.get(candidate.root_cause_hypothesis)
+            template = _TEMPLATES.get(candidate.candidate_id)
             if not template:
-                continue  # unknown hypothesis id -> skip rather than invent wording
-            evidence_strings = [e.description for e in candidate.supporting_evidence]
+                continue  # unknown candidate id -> skip rather than invent wording
             items.append(RecommendationItem(
-                root_cause=candidate.root_cause_hypothesis,
+                candidate_id=candidate.candidate_id,
                 summary=template["summary"],
                 problem_explanation=template["problem_explanation"],
                 user_impact=template["user_impact"],
                 fix_steps=template["fix_steps"],
-                evidence=evidence_strings,
-                affected_audits=[e.metric for e in candidate.supporting_evidence],
+                evidence_refs=candidate.evidence_refs,
                 impact=template["impact"],
                 ease_of_fix=template["ease_of_fix"],
                 confidence=_confidence_for(candidate.supporting_evidence, candidate.strength),

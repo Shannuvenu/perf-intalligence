@@ -29,13 +29,11 @@ from app.models.psi_run import PsiRun
 from app.models.stabilized_metric import StabilizedMetric
 from app.schemas.recommendation import RecommendationItem
 from app.services.evidence.extractor import extract_evidence
-from app.services.llm.base import LlmProviderError
-from app.services.llm.client import get_llm_provider
 from app.services.psi.base import PsiProviderError
 from app.services.psi.client import get_psi_provider
 from app.services.psi.normalizer import PsiParsingError, normalize_psi_result
 from app.services.recommendations.candidate_signals import generate_candidate_signals
-from app.services.recommendations.priority import assign_priorities
+from app.services.recommendations.pipeline import run_recommendation_pipeline
 
 router = APIRouter(prefix="/api/quick-analyze", tags=["quick-analyze"])
 
@@ -51,6 +49,11 @@ class QuickAnalyzeResponse(BaseModel):
     # not just the fix list.
     category_scores: dict[str, float | None] | None = None
     core_web_vitals: dict[str, float | None] | None = None
+    # The literal URL PageSpeed actually analyzed (product spec section 17):
+    # a URL containing redirect_url=... or similar query params is analyzed
+    # AS-IS - PageSpeed never follows it - so the frontend can make that
+    # explicit instead of implying the redirect target was analyzed.
+    analyzed_url: str | None = None
 
 
 class QuickUrlAnalyzeRequest(BaseModel):
@@ -65,7 +68,7 @@ class QuickUrlAnalyzeRequest(BaseModel):
         return v
 
 
-async def _analyze_normalized(normalized: dict, strategy: str) -> QuickAnalyzeResponse:
+async def _analyze_normalized(normalized: dict, strategy: str, analyzed_url: str | None = None) -> QuickAnalyzeResponse:
     """Shared tail of both entry points: build an in-memory single-run
     'stabilized' window from an already-normalized PSI result, then run the
     evidence -> candidate signals -> LLM pipeline exactly as the
@@ -91,21 +94,23 @@ async def _analyze_normalized(normalized: dict, strategy: str) -> QuickAnalyzeRe
     evidence = extract_evidence([fake_run], fake_stabilized, settings)
     candidates = generate_candidate_signals(evidence)
 
-    provider = get_llm_provider(settings)
-    try:
-        result = await provider.synthesize(evidence, candidates)
-    except LlmProviderError as exc:
-        raise HTTPException(status_code=502, detail=f"LLM synthesis failed: {exc}") from exc
+    ranked, validation_status, note, provider = await run_recommendation_pipeline(
+        evidence, candidates, page_metrics=median_metrics, settings=settings,
+    )
+    if validation_status == "invalid" and not ranked:
+        # An actual provider failure (network/parsing) - not just "zero
+        # recommendations", which is a valid successful result.
+        raise HTTPException(status_code=502, detail=f"LLM synthesis failed: {note}")
 
-    ranked: list[RecommendationItem] = assign_priorities(result.recommendations, settings)
-    top5 = ranked[:5]
+    top5: list[RecommendationItem] = ranked[:5]
 
     return QuickAnalyzeResponse(
         recommendations=top5,
         model_name=provider.model_name,
-        note=result.insufficient_evidence_note if not top5 else None,
+        note=note if not top5 else None,
         category_scores=normalized["category_scores"],
         core_web_vitals=normalized["core_web_vitals"],
+        analyzed_url=analyzed_url,
     )
 
 
@@ -133,4 +138,4 @@ async def quick_analyze_url(payload: QuickUrlAnalyzeRequest) -> QuickAnalyzeResp
     except PsiParsingError as exc:
         raise HTTPException(status_code=502, detail=f"PageSpeed returned an unparsable report: {exc}") from exc
 
-    return await _analyze_normalized(normalized, strategy=strategy)
+    return await _analyze_normalized(normalized, strategy=strategy, analyzed_url=payload.url)

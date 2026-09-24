@@ -40,6 +40,9 @@ export default function RecommendationCard({ item }: { item: RecommendationItem 
               <span className="text-text">{item.ease_of_fix}</span> · Confidence:{" "}
               <span className="font-mono-num text-text">{Math.round(item.confidence * 100)}%</span>
             </span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full border border-emerald-500/30 text-emerald-400/90">
+              PageSpeed-supported
+            </span>
           </div>
           <div className="font-medium text-sm">{item.root_cause}</div>
           <p className="text-sm text-subtext mt-1 leading-relaxed">{item.summary}</p>
@@ -81,6 +84,21 @@ export default function RecommendationCard({ item }: { item: RecommendationItem 
               ))}
             </ul>
           </Section>
+
+          {item.resources.length > 0 && (
+            <Section title={item.resources.length === 1 ? "Resource" : "Resources"}>
+              <ul className="space-y-1">
+                {item.resources.map((url) => (
+                  <li
+                    key={url}
+                    className="text-xs font-mono-num text-accent/90 break-all pl-3 border-l border-border"
+                  >
+                    {url}
+                  </li>
+                ))}
+              </ul>
+            </Section>
+          )}
 
           {item.affected_audits.length > 0 && (
             <Section title="Affected audits">

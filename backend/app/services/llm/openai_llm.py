@@ -1,10 +1,13 @@
 """
 Groq-backed LLM synthesis provider.
 
-Uses Groq's OpenAI-compatible API with strict Structured Outputs.
-
-The response is constrained to the same shape expected by
-LlmRecommendationSet and then validated by Pydantic.
+Uses Groq's OpenAI-compatible API with strict Structured Outputs. The
+response is constrained to reference evidence only by id (evidence_refs) and
+to pick candidate_id only from the fixed, closed set the rule engine can
+ever produce (see candidate_signals.KNOWN_CANDIDATE_IDS) - never free-form
+evidence text. Every field is then re-validated by Pydantic, and every
+evidence_ref/candidate_id is re-checked against what was actually supplied
+for THIS run by recommendations/validation.py before anything reaches a user.
 """
 
 import json
@@ -16,8 +19,7 @@ from app.schemas.recommendation import LlmRecommendationSet
 from app.services.evidence.models import Evidence
 from app.services.llm.base import LlmProviderError, LlmSynthesisProvider
 from app.services.llm.prompts import SYSTEM_PROMPT, build_user_payload
-from app.services.recommendations.candidate_signals import CandidateSignal
-
+from app.services.recommendations.candidate_signals import KNOWN_CANDIDATE_IDS, CandidateSignal
 
 GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 
@@ -55,7 +57,11 @@ class OpenAiLlmProvider(LlmSynthesisProvider):
         """
         JSON Schema for Groq Structured Outputs.
 
-        This mirrors LlmRecommendationSet / RecommendationItem.
+        This mirrors LlmRecommendationSet / RecommendationItem's
+        LLM-provided fields only - `root_cause`, `evidence`, `resources` and
+        `affected_audits` are resolved server-side after validation and are
+        deliberately NOT part of what the model is asked to produce, so
+        there is no free-text field left for it to fabricate evidence in.
 
         Groq strict mode requires:
         - every property to be required
@@ -66,10 +72,9 @@ class OpenAiLlmProvider(LlmSynthesisProvider):
         recommendation_item = {
             "type": "object",
             "properties": {
-                "root_cause": {
+                "candidate_id": {
                     "type": "string",
-                    "minLength": 3,
-                    "maxLength": 200,
+                    "enum": sorted(KNOWN_CANDIDATE_IDS),
                 },
                 "summary": {
                     "type": "string",
@@ -90,18 +95,12 @@ class OpenAiLlmProvider(LlmSynthesisProvider):
                         "type": "string",
                     },
                 },
-                "evidence": {
+                "evidence_refs": {
                     "type": "array",
                     "items": {
                         "type": "string",
                     },
                     "minItems": 1,
-                },
-                "affected_audits": {
-                    "type": "array",
-                    "items": {
-                        "type": "string",
-                    },
                 },
                 "impact": {
                     "type": "string",
@@ -129,23 +128,18 @@ class OpenAiLlmProvider(LlmSynthesisProvider):
                     "minLength": 10,
                     "maxLength": 2000,
                 },
-                "priority": {
-                    "type": ["string", "null"],
-                },
             },
             "required": [
-                "root_cause",
+                "candidate_id",
                 "summary",
                 "problem_explanation",
                 "user_impact",
                 "fix_steps",
-                "evidence",
-                "affected_audits",
+                "evidence_refs",
                 "impact",
                 "ease_of_fix",
                 "confidence",
                 "suggested_fix",
-                "priority",
             ],
             "additionalProperties": False,
         }
@@ -172,15 +166,18 @@ class OpenAiLlmProvider(LlmSynthesisProvider):
         self,
         evidence: list[Evidence],
         candidates: list[CandidateSignal],
+        page_metrics: dict | None = None,
     ) -> LlmRecommendationSet:
 
         user_payload = build_user_payload(
-            evidence=[
-                e.model_dump()
-                for e in evidence
-            ],
+            page_metrics=page_metrics or {},
+            evidence=[e.model_dump() for e in evidence],
             candidates=[
-                c.model_dump()
+                {
+                    "candidate_id": c.candidate_id,
+                    "title": c.root_cause_hypothesis,
+                    "evidence_refs": c.evidence_refs,
+                }
                 for c in candidates
             ],
         )
@@ -191,22 +188,21 @@ class OpenAiLlmProvider(LlmSynthesisProvider):
 IMPORTANT RULES:
 
 1. Return only the structured recommendation response.
-2. Never invent a problem that is not supported by the supplied evidence.
-3. Every recommendation must be directly supported by evidence.
+2. Never invent a candidate_id that is not in supported_candidates for this run.
+3. Every recommendation must reference evidence_refs that belong to that exact candidate.
 4. Every recommendation must contain every field.
 5. fix_steps must contain ONLY strings.
-6. evidence must contain ONLY strings.
-7. affected_audits must contain ONLY strings.
-8. problem_explanation may be a string or null.
-9. user_impact may be a string or null.
-10. priority may be a string or null.
-11. insufficient_evidence_note may be a string or null.
-12. confidence must be between 0.0 and 1.0.
-13. impact must be exactly one of: high, medium, low.
-14. ease_of_fix must be exactly one of: easy, medium, hard.
-15. Do not add fields that are not defined by the schema.
-16. Do not return Markdown.
-17. Keep the recommendations evidence-backed and actionable.
+6. evidence_refs must contain ONLY evidence id strings (e.g. "E01") taken from the supplied evidence.
+7. problem_explanation may be a string or null.
+8. user_impact may be a string or null.
+9. insufficient_evidence_note may be a string or null.
+10. confidence must be between 0.0 and 1.0.
+11. impact must be exactly one of: high, medium, low.
+12. ease_of_fix must be exactly one of: easy, medium, hard.
+13. Do not add fields that are not defined by the schema.
+14. Do not return Markdown.
+15. At most one recommendation per candidate_id - never duplicate a candidate.
+16. If supported_candidates is empty, return recommendations: [] with a clear insufficient_evidence_note.
 """
 
         try:
